@@ -1,1 +1,4 @@
 poetry.lock
+memcached_lite/__pycache__/__init__.cpython-313.pyc
+memcached_lite/__pycache__/__main__.cpython-313.pyc
+memcached_lite/__pycache__/run_daemon.cpython-313.pyc
