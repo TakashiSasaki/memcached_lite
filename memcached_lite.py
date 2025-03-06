@@ -1,6 +1,6 @@
 # memcached_lite.py
 # Memcached-compatible lightweight server (asyncio-based), fully protocol-compliant with detailed logging,
-# improved stats, and refined noreply handling
+# improved stats, and refined noreply handling (using flexible detection)
 
 import asyncio
 import time
@@ -84,9 +84,13 @@ class MemcachedServer:
                 cmd = parts[0].lower()
 
                 # set command: set <key> <flags> <expiry> <bytes> [noreply]
-                if cmd == 'set' and (len(parts) == 5 or (len(parts) == 6 and parts[5].lower() == 'noreply')):
-                    key, flags, expiry, bytes_length = parts[1], parts[2], int(parts[3]), int(parts[4])
-                    noreply = (len(parts) == 6 and parts[5].lower() == 'noreply')
+                if cmd == 'set' and len(parts) >= 5:
+                    key = parts[1]
+                    flags = parts[2]
+                    expiry = int(parts[3])
+                    bytes_length = int(parts[4])
+                    # Detect noreply in any subsequent argument
+                    noreply = any(part.lower() == 'noreply' for part in parts[5:])
                     try:
                         # Read exactly bytes_length + CRLF (i.e. +2 bytes)
                         data_block = await reader.readexactly(bytes_length + 2)
@@ -110,9 +114,9 @@ class MemcachedServer:
                     writer.write(b'END\r\n')
 
                 # delete command: delete <key> [noreply]
-                elif cmd == 'delete' and (len(parts) == 2 or (len(parts) == 3 and parts[2].lower() == 'noreply')):
-                    noreply = (len(parts) == 3 and parts[2].lower() == 'noreply')
+                elif cmd == 'delete' and len(parts) >= 2:
                     key = parts[1]
+                    noreply = any(part.lower() == 'noreply' for part in parts[2:])
                     existed = self.store.delete(key)
                     logging.debug(f"Delete command - key: {key}, existed: {existed}, noreply: {noreply}")
                     if not noreply:
@@ -125,7 +129,7 @@ class MemcachedServer:
 
                 # flush_all command: flush_all [noreply]
                 elif cmd == 'flush_all':
-                    noreply = (len(parts) == 2 and parts[1].lower() == 'noreply')
+                    noreply = any(part.lower() == 'noreply' for part in parts[1:])
                     self.store.flush()
                     logging.debug(f"Flush_all command, noreply: {noreply}")
                     if not noreply:
