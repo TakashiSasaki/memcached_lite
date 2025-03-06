@@ -1,3 +1,5 @@
-import memcached_lite
-memcached_lite.start()  # バックグラウンドで起動
-memcached_lite.stop()   # 停止
+# __init__.py
+
+# run_daemon.py の start/stop をインポートし、
+# memcached_lite モジュールから直接呼び出せるようにする。
+from .run_daemon import start, stop
