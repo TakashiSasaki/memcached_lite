@@ -1,9 +1,11 @@
 # memcached_lite.py
-# Memcached-compatible lightweight server (asyncio-based), fully protocol-compliant with detailed logging,
-# improved stats (including get_hits, get_misses, version), and refined noreply handling (using flexible detection)
+# Memcached-compatible lightweight server (asyncio-based) with enhanced statistics tracking,
+# including process information, command counters, and uptime tracking.
 
 import asyncio
 import time
+import os
+import sys
 import logging
 
 # Configure detailed logging
@@ -16,7 +18,13 @@ class MemcachedLite:
         self.start_time = time.time()
         self.get_hits = 0           # Count of successful GET operations
         self.get_misses = 0         # Count of GET operations with no result
+        self.cmd_get = 0            # Total number of GET commands executed
+        self.cmd_set = 0            # Total number of SET commands executed
+        self.cmd_delete = 0         # Total number of DELETE commands executed
+        self.total_items = 0        # Total number of items stored since startup
         self.version = "memcached_lite 0.1"  # Fixed version string
+        self.pid = os.getpid()      # Process ID
+        self.process_path = sys.executable  # Path to the Python executable
 
     def set(self, key, value, expiry=0):
         self.store[key] = value
@@ -24,10 +32,13 @@ class MemcachedLite:
             self.expirations[key] = time.time() + expiry
         else:
             self.expirations.pop(key, None)
+        self.cmd_set += 1
+        self.total_items += 1
         logging.debug(f"Set key: {key}, value: {value}, expiry: {expiry}")
         logging.debug(f"Current store: {self.store}")
 
     def get(self, key):
+        self.cmd_get += 1
         expiry = self.expirations.get(key)
         if expiry and time.time() > expiry:
             self.delete(key)
@@ -43,6 +54,7 @@ class MemcachedLite:
         return value
 
     def delete(self, key):
+        self.cmd_delete += 1
         existed = key in self.store
         self.store.pop(key, None)
         self.expirations.pop(key, None)
@@ -60,11 +72,18 @@ class MemcachedLite:
         uptime = time.time() - self.start_time
         # Return enhanced stats
         stats_data = {
+            "pid": f"{self.pid}",
+            "time": f"{int(time.time())}",
             "uptime": f"{int(uptime)}",
             "curr_items": f"{len(self.store)}",
+            "total_items": f"{self.total_items}",
             "get_hits": f"{self.get_hits}",
             "get_misses": f"{self.get_misses}",
-            "version": self.version
+            "cmd_get": f"{self.cmd_get}",
+            "cmd_set": f"{self.cmd_set}",
+            "cmd_delete": f"{self.cmd_delete}",
+            "version": self.version,
+            "process_path": self.process_path
         }
         logging.debug(f"Stats requested: {stats_data}")
         return stats_data
