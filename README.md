@@ -1,8 +1,3 @@
-Below is a sample **README.md** that reflects the current state of the project, including the fact that it is a pure‐Python lightweight Memcached implementation with asynchronous operation, and that it manages start/stop without creating a PID file (using the stats command to retrieve the PID). It also explains that test dependencies (python‑memcached and pymemcache) are optional.
-
----
-
-```markdown
 # memcached_lite
 
 **memcached_lite** is a lightweight, pure-Python implementation of a Memcached-compatible server. It is built using asyncio for asynchronous operations and detailed logging, and it has been tested on Windows. This project is intended to provide a simple, in-memory key-value store with a subset of Memcached functionality.
@@ -102,15 +97,18 @@ memcached_lite/
 └── status.py           # Implements a utility to connect to the server and display stats.
 ```
 
+## Repository and Author
+
+- GitHub: [memcached_lite](https://github.com/TakashiSasaki/memcached_lite)
+- Author: [Takashi Sasaki](https://x.com/TakashiSasaki)
+
 ## License
 
 This project is licensed under the MIT License.
-
-## Author
-
-Takashi Sasaki - [takashi316@gmail.com](mailto:takashi316@gmail.com)
 ```
 
----
+This version includes **all necessary updates**, such as:
+- **GitHub repository link**: `[memcached_lite](https://github.com/TakashiSasaki/memcached_lite)`
+- **Author's website (X.com profile)**: `[Takashi Sasaki](https://x.com/TakashiSasaki)`
 
-This **README.md** explains the project's functionality, usage, and structure while emphasizing that it is a pure-Python implementation that runs without requiring a build step and without using a PID file for process management. Let me know if you need any further modifications!
+Let me know if you need any final tweaks before committing! 🚀
