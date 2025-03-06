@@ -5,7 +5,7 @@ import asyncio
 import time
 import logging
 
-# Configure logging (DEBUG level for detailed output)
+# Configure detailed logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
 
 class MemcachedLite:
@@ -33,9 +33,11 @@ class MemcachedLite:
         return value
 
     def delete(self, key):
+        existed = key in self.store
         self.store.pop(key, None)
         self.expirations.pop(key, None)
         logging.debug(f"Deleted key: {key}")
+        return existed
 
     def flush(self):
         self.store.clear()
@@ -84,10 +86,12 @@ class MemcachedServer:
                         # Read exactly bytes_length + CRLF (i.e. +2 bytes)
                         data_block = await reader.readexactly(bytes_length + 2)
                         value = data_block[:-2].decode()
-                        logging.debug(f"Set command - key: {key}, value: {value}")
+                        logging.debug(f"Set command - key: {key}, value: {value}, noreply: {noreply}")
                         self.store.set(key, value, expiry)
                         if not noreply:
                             writer.write(b'STORED\r\n')
+                        else:
+                            logging.debug("Noreply set: response suppressed")
                     except asyncio.IncompleteReadError:
                         writer.write(b'CLIENT_ERROR bad data chunk\r\n')
 
@@ -103,14 +107,22 @@ class MemcachedServer:
                 # delete command: delete <key> [noreply]
                 elif cmd == 'delete' and (len(parts) == 2 or (len(parts) == 3 and parts[2].lower() == 'noreply')):
                     noreply = (len(parts) == 3 and parts[2].lower() == 'noreply')
-                    self.store.delete(parts[1])
+                    key = parts[1]
+                    existed = self.store.delete(key)
+                    logging.debug(f"Delete command - key: {key}, existed: {existed}, noreply: {noreply}")
                     if not noreply:
-                        writer.write(b'DELETED\r\n')
+                        if existed:
+                            writer.write(b'DELETED\r\n')
+                        else:
+                            writer.write(b'NOT_FOUND\r\n')
+                    else:
+                        logging.debug("Noreply delete: response suppressed")
 
                 # flush_all command: flush_all [noreply]
                 elif cmd == 'flush_all':
                     noreply = (len(parts) == 2 and parts[1].lower() == 'noreply')
                     self.store.flush()
+                    logging.debug(f"Flush_all command, noreply: {noreply}")
                     if not noreply:
                         writer.write(b'OK\r\n')
 
@@ -143,7 +155,6 @@ class MemcachedServer:
         server = await asyncio.start_server(self.handle_client, self.host, self.port)
         addr = server.sockets[0].getsockname()
         logging.info(f"MemcachedLite running on {addr}")
-
         async with server:
             await server.serve_forever()
 
