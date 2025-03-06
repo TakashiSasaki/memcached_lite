@@ -1,6 +1,6 @@
 # memcached_lite.py
 # Memcached-compatible lightweight server (asyncio-based), fully protocol-compliant with detailed logging,
-# improved stats, and refined noreply handling (using flexible detection)
+# improved stats (including get_hits, get_misses, version), and refined noreply handling (using flexible detection)
 
 import asyncio
 import time
@@ -14,6 +14,9 @@ class MemcachedLite:
         self.store = {}             # In-memory key-value store
         self.expirations = {}       # Expiration timestamps for keys
         self.start_time = time.time()
+        self.get_hits = 0           # Count of successful GET operations
+        self.get_misses = 0         # Count of GET operations with no result
+        self.version = "memcached_lite 0.1"  # Fixed version string
 
     def set(self, key, value, expiry=0):
         self.store[key] = value
@@ -29,8 +32,13 @@ class MemcachedLite:
         if expiry and time.time() > expiry:
             self.delete(key)
             logging.debug(f"Key expired: {key}")
+            self.get_misses += 1
             return None
         value = self.store.get(key)
+        if value is not None:
+            self.get_hits += 1
+        else:
+            self.get_misses += 1
         logging.debug(f"Get key: {key}, returned value: {value}")
         return value
 
@@ -50,10 +58,13 @@ class MemcachedLite:
 
     def stats(self):
         uptime = time.time() - self.start_time
-        # Return simplified stats in standard format
+        # Return enhanced stats
         stats_data = {
             "uptime": f"{int(uptime)}",
-            "curr_items": f"{len(self.store)}"
+            "curr_items": f"{len(self.store)}",
+            "get_hits": f"{self.get_hits}",
+            "get_misses": f"{self.get_misses}",
+            "version": self.version
         }
         logging.debug(f"Stats requested: {stats_data}")
         return stats_data
