@@ -2,14 +2,22 @@
 
 import sys
 from .run_daemon import start, stop
+from .status import status
 
 def main():
-    # 引数があり、かつ "stop" と一致する場合は stop() を呼ぶ
-    if len(sys.argv) > 1 and sys.argv[1].lower() == "stop":
-        stop()
+    if len(sys.argv) > 1:
+        cmd = sys.argv[1].lower()
+        if cmd == "start":
+            start()
+        elif cmd == "stop":
+            stop()
+        elif cmd == "status":
+            status()
+        else:
+            print(f"Unknown command: {sys.argv[1]}")
     else:
-        # それ以外の場合は start() を呼ぶ
-        start()
+        # No argument given, default to status command
+        status()
 
 if __name__ == "__main__":
     main()
