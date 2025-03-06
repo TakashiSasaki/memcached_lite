@@ -1,5 +1,6 @@
 # memcached_lite.py
-# Memcached-compatible lightweight server (asyncio-based), fully protocol-compliant with detailed logging and noreply handling
+# Memcached-compatible lightweight server (asyncio-based), fully protocol-compliant with detailed logging,
+# improved stats, and refined noreply handling
 
 import asyncio
 import time
@@ -21,6 +22,7 @@ class MemcachedLite:
         else:
             self.expirations.pop(key, None)
         logging.debug(f"Set key: {key}, value: {value}, expiry: {expiry}")
+        logging.debug(f"Current store: {self.store}")
 
     def get(self, key):
         expiry = self.expirations.get(key)
@@ -37,18 +39,21 @@ class MemcachedLite:
         self.store.pop(key, None)
         self.expirations.pop(key, None)
         logging.debug(f"Deleted key: {key}")
+        logging.debug(f"Current store: {self.store}")
         return existed
 
     def flush(self):
         self.store.clear()
         self.expirations.clear()
         logging.debug("Flushed all keys")
+        logging.debug(f"Current store: {self.store}")
 
     def stats(self):
         uptime = time.time() - self.start_time
+        # Return simplified stats in standard format
         stats_data = {
-            "uptime": f"{uptime:.2f}",
-            "curr_items": len(self.store)
+            "uptime": f"{int(uptime)}",
+            "curr_items": f"{len(self.store)}"
         }
         logging.debug(f"Stats requested: {stats_data}")
         return stats_data
