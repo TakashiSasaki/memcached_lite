@@ -47,9 +47,10 @@ async def parse_resp_command(reader):
         return line.split()
 
 class RedisLiteServer:
-    def __init__(self, host='127.0.0.1', port=11311):
+    def __init__(self, host='127.0.0.1', port=11311, log_interval=10):
         self.host = host
         self.port = port
+        self.log_interval = log_interval  # Interval in seconds for logging subscriptions
         self.clients = {}           # Mapping: client_id -> { "id": client_id, "addr": addr, "subscriptions": [], "writer": writer }
         self.client_counter = 0     # Unique id counter for clients
 
@@ -154,10 +155,26 @@ class RedisLiteServer:
                 logging.info(f"Removed client id {client_id} from registry")
             logging.info(f"Connection closed: {addr} (id: {client_id})")
 
+    async def log_subscriptions(self):
+        """
+        Periodically logs the subscriptions for all connected clients.
+        The logging interval is configurable via self.log_interval (default: 10 seconds).
+        """
+        while True:
+            logging.info("Logging current subscriptions for all clients:")
+            if self.clients:
+                for cid, info in self.clients.items():
+                    logging.info(f"Client {cid} ({info['addr']}): {info['subscriptions']}")
+            else:
+                logging.info("No clients connected.")
+            await asyncio.sleep(self.log_interval)
+
     async def start(self):
         server = await asyncio.start_server(self.handle_client, self.host, self.port)
         addr = server.sockets[0].getsockname()
         logging.info(f"RedisLiteServer listening on {addr}")
+        # Schedule the log_subscriptions background task.
+        asyncio.create_task(self.log_subscriptions())
         async with server:
             await server.serve_forever()
 
