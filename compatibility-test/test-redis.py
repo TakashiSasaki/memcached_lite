@@ -33,6 +33,9 @@ def test_psubscribe(r):
         else:
             print("No message received...")
         time.sleep(1)
+    # Wait extra time to allow keepalive messages to be sent
+    print("Waiting 5 seconds before closing pubsub connection...")
+    time.sleep(5)
     pubsub.close()
     print("PSUBSCRIBE test complete.")
 
@@ -41,6 +44,9 @@ def test_keepalive(r, conn_id):
     result = r.execute_command("KEEPALIVE")
     print(f"KEEPALIVE response from connection {conn_id}:")
     print(result)
+    # Wait a few seconds to allow the server to send keepalive messages to other clients.
+    print("Waiting 5 seconds after sending KEEPALIVE command...")
+    time.sleep(5)
 
 if __name__ == '__main__':
     # Open 3 separate connections
@@ -69,3 +75,7 @@ if __name__ == '__main__':
     
     # Test KEEPALIVE on connection 3 (which is not in subscription mode)
     test_keepalive(r3, 3)
+    
+    # Final delay to keep connections alive before closing
+    print("Waiting 10 seconds before closing all connections...")
+    time.sleep(10)

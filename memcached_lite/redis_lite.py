@@ -138,9 +138,12 @@ class RedisLiteServer:
                         subscription_mode = True
                 elif command == "KEEPALIVE":
                     logging.debug(f"KEEPALIVE command received from {addr} (id: {client_id})")
+                    # Log the current subscriptions for each client.
+                    logging.info("Current client subscriptions:")
+                    for cid, info in self.clients.items():
+                        logging.info(f"Client {cid} ({info['addr']}): {info['subscriptions']}")
                     # Immediately call send_keepalive method.
                     await self.send_keepalive()
-                    # Optionally, you can respond to the client.
                     writer.write(b"+OK\r\n")
                 else:
                     logging.debug(f"Unknown command from {addr} (id: {client_id}): {cmd_parts}")
@@ -165,15 +168,21 @@ class RedisLiteServer:
         Sends a keepalive message to all connected clients.
         The message content can be controlled externally.
         """
-        for cid, info in self.clients.items():
+        for cid, info in list(self.clients.items()):
             writer = info.get("writer")
             if writer:
                 try:
+                    # Check if the writer is already closing.
+                    if writer.is_closing():
+                        logging.warning(f"Writer for client id {cid} is closing. Skipping keepalive.")
+                        continue
                     writer.write(message.encode())
                     await writer.drain()
                     logging.debug(f"Sent keepalive to client id {cid}")
-                except Exception as e:
+                except (ConnectionResetError, ConnectionAbortedError, OSError) as e:
                     logging.exception(f"Error sending keepalive to client id {cid}: {e}")
+                    # Optionally remove the client from the registry if needed.
+                    del self.clients[cid]
 
     async def start(self):
         server = await asyncio.start_server(self.handle_client, self.host, self.port)
