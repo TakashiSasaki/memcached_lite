@@ -5,8 +5,7 @@ import sys
 sys.path.append("..")
 from memcached_lite.redis_lite import RedisLiteServer  # Assumes RedisLiteServer can be imported
 
-# For testing notify_del, we assume that the server instance is created externally.
-# Alternatively, we can create a new instance for testing purposes.
+# Create a server instance (assumes the server is running in the same environment)
 server_instance = RedisLiteServer()
 
 def test_ping(r, conn_id):
@@ -29,7 +28,6 @@ def test_client_list(r):
 def test_psubscribe(r):
     print("\nTesting PSUBSCRIBE command for key notifications with multiple patterns...")
     pubsub = r.pubsub()
-    # Subscribe to multiple patterns so that the server's subscription list is richly populated.
     patterns = [
         "__keyspace@0__:*",
         "__keyspace@0__:user:*",
@@ -56,31 +54,31 @@ def test_psubscribe(r):
     pubsub.close()
     print("PSUBSCRIBE test complete.")
 
-async def test_notify_del():
-    print("\nTesting notify_del for key 'testkey'...")
-    # Create a subscription client for deletion events.
+async def test_notify_set():
+    print("\nTesting notify_set for key 'testkey' with binary data...")
+    # Create a subscription client specifically for set events.
     r_sub = redis.Redis(host='localhost', port=11311, decode_responses=True)
     pubsub = r_sub.pubsub()
-    # Subscribe to deletion events on keyevent and keyspace channels for 'testkey'
-    pubsub.psubscribe("__keyevent@0__:del", f"__keyspace@0__:testkey")
-    print("Subscribed for deletion notifications for key 'testkey'.")
+    # Subscribe to keyevent 'set' and keyspace for "testkey"
+    pubsub.psubscribe("__keyevent@0__:set", f"__keyspace@0__:testkey")
+    print("Subscribed for set notifications for key 'testkey'.")
     
     # Wait to ensure subscription is active.
     await asyncio.sleep(2)
     
-    # Call notify_del on the server instance.
-    print("Calling notify_del('testkey')...")
-    await server_instance.notify_del("testkey")
+    # Define some binary value for the test.
+    binary_value = b'\x01\x02\x03'
+    print("Calling notify_set('testkey', binary_value)...")
+    await server_instance.notify_set("testkey", binary_value)
     
-    # Wait for messages and print any that are received.
     start = time.time()
     while time.time() - start < 5:
         message = pubsub.get_message(timeout=1)
         if message:
-            print("Received deletion notification:", message)
+            print("Received set notification:", message)
         await asyncio.sleep(1)
     pubsub.close()
-    print("notify_del test complete.")
+    print("notify_set test complete.")
 
 if __name__ == '__main__':
     # Open 3 separate connections
@@ -107,8 +105,8 @@ if __name__ == '__main__':
     # Test PSUBSCRIBE on one connection (subscribe to multiple patterns)
     test_psubscribe(r1)
     
-    # Run the notify_del test using asyncio
-    asyncio.run(test_notify_del())
+    # Test notify_set using asyncio
+    asyncio.run(test_notify_set())
     
     # Final delay to keep connections alive before closing
     print("Waiting 10 seconds before closing all connections...")
