@@ -3,9 +3,9 @@ import time
 import asyncio
 import sys
 sys.path.append("..")
-from memcached_lite.redis_lite import RedisLiteServer  # Assumes RedisLiteServer can be imported
+from memcached_lite.redis_lite import RedisLiteServer  # Adjust the import path as needed
 
-# Create a server instance (assumes the server is running in the same environment)
+# Create a server instance (assumes RedisLiteServer is running in the same environment)
 server_instance = RedisLiteServer()
 
 def test_ping(r, conn_id):
@@ -56,17 +56,14 @@ def test_psubscribe(r):
 
 async def test_notify_set():
     print("\nTesting notify_set for key 'testkey' with binary data...")
-    # Create a subscription client specifically for set events.
     r_sub = redis.Redis(host='localhost', port=11311, decode_responses=True)
     pubsub = r_sub.pubsub()
-    # Subscribe to keyevent 'set' and keyspace for "testkey"
+    # Subscribe to keyevent 'set' and keyspace notifications for "testkey"
     pubsub.psubscribe("__keyevent@0__:set", f"__keyspace@0__:testkey")
     print("Subscribed for set notifications for key 'testkey'.")
     
-    # Wait to ensure subscription is active.
     await asyncio.sleep(2)
     
-    # Define some binary value for the test.
     binary_value = b'\x01\x02\x03'
     print("Calling notify_set('testkey', binary_value)...")
     await server_instance.notify_set("testkey", binary_value)
@@ -80,13 +77,34 @@ async def test_notify_set():
     pubsub.close()
     print("notify_set test complete.")
 
+async def test_notify_expire():
+    print("\nTesting notify_expire for key 'testkey'...")
+    r_sub = redis.Redis(host='localhost', port=11311, decode_responses=True)
+    pubsub = r_sub.pubsub()
+    # Subscribe to keyevent 'expired' and keyspace notifications for "testkey"
+    pubsub.psubscribe("__keyevent@0__:expired", f"__keyspace@0__:testkey")
+    print("Subscribed for expire notifications for key 'testkey'.")
+    
+    await asyncio.sleep(2)
+    
+    print("Calling notify_expire('testkey')...")
+    await server_instance.notify_expire("testkey")
+    
+    start = time.time()
+    while time.time() - start < 5:
+        message = pubsub.get_message(timeout=1)
+        if message:
+            print("Received expire notification:", message)
+        await asyncio.sleep(1)
+    pubsub.close()
+    print("notify_expire test complete.")
+
 if __name__ == '__main__':
     # Open 3 separate connections
     r1 = redis.Redis(host='localhost', port=11311, decode_responses=True)
     r2 = redis.Redis(host='localhost', port=11311, decode_responses=True)
     r3 = redis.Redis(host='localhost', port=11311, decode_responses=True)
     
-    # Test PING and INFO on each connection
     test_ping(r1, 1)
     test_info(r1, 1)
     
@@ -96,18 +114,15 @@ if __name__ == '__main__':
     test_ping(r3, 3)
     test_info(r3, 3)
     
-    # Wait a moment to ensure all connections are established
     time.sleep(2)
     
-    # Test CLIENT LIST using one connection
     test_client_list(r1)
     
-    # Test PSUBSCRIBE on one connection (subscribe to multiple patterns)
     test_psubscribe(r1)
     
-    # Test notify_set using asyncio
     asyncio.run(test_notify_set())
     
-    # Final delay to keep connections alive before closing
+    asyncio.run(test_notify_expire())
+    
     print("Waiting 10 seconds before closing all connections...")
     time.sleep(10)

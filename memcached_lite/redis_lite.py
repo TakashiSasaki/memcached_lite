@@ -1,7 +1,7 @@
+# filename redis_lite.py
 import asyncio
 import time
 import os
-import sys
 import logging
 import fnmatch
 
@@ -166,7 +166,6 @@ class RedisLiteServer:
         event_channel = "__keyevent@0__:del"
         keyspace_channel = f"__keyspace@0__:{key}"
         
-        # Build RESP messages for deletion.
         event_msg = f"*3\r\n$7\r\nmessage\r\n${len(event_channel)}\r\n{event_channel}\r\n${len(key)}\r\n{key}\r\n"
         keyspace_msg = f"*3\r\n$7\r\nmessage\r\n${len(keyspace_channel)}\r\n{keyspace_channel}\r\n$3\r\nDEL\r\n"
         
@@ -205,10 +204,8 @@ class RedisLiteServer:
         event_channel = "__keyevent@0__:set"
         keyspace_channel = f"__keyspace@0__:{key}"
         
-        # Decode binary data using 'latin-1' for one-to-one mapping.
         value_str = value.decode('latin-1')
         
-        # Build RESP message for keyevent notification (4 elements).
         event_msg = (
             f"*4\r\n"
             f"$7\r\nmessage\r\n"
@@ -216,7 +213,6 @@ class RedisLiteServer:
             f"${len(key)}\r\n{key}\r\n"
             f"${len(value_str)}\r\n{value_str}\r\n"
         )
-        # Build RESP message for keyspace notification (4 elements).
         keyspace_msg = (
             f"*4\r\n"
             f"$7\r\nmessage\r\n"
@@ -243,6 +239,42 @@ class RedisLiteServer:
                             logging.debug(f"Sent keyspace set notification for key '{key}' to client id {cid} (pattern: {pattern})")
                         except Exception as e:
                             logging.exception(f"Error sending keyspace set notification to client id {cid}: {e}")
+
+    async def notify_expire(self, key: str):
+        """
+        Sends an expiration notification for the given key to all clients whose subscription
+        patterns match either the keyevent channel or the keyspace channel for expiration.
+        
+        For keyevent notifications, the channel is '__keyevent@0__:expired' and the data is the key.
+        For keyspace notifications, the channel is '__keyspace@0__:{key}' and the data is 'expired'.
+        
+        RESP message format:
+          *3\r\n$7\r\nmessage\r\n$<len(channel)>\r\n<channel>\r\n$<len(data)>\r\n<data>\r\n
+        """
+        event_channel = "__keyevent@0__:expired"
+        keyspace_channel = f"__keyspace@0__:{key}"
+        
+        event_msg = f"*3\r\n$7\r\nmessage\r\n${len(event_channel)}\r\n{event_channel}\r\n${len(key)}\r\n{key}\r\n"
+        keyspace_msg = f"*3\r\n$7\r\nmessage\r\n${len(keyspace_channel)}\r\n{keyspace_channel}\r\n$7\r\nexpired\r\n"
+        
+        for cid, info in list(self.clients.items()):
+            writer = info.get("writer")
+            if writer and not writer.is_closing():
+                for pattern in info["subscriptions"]:
+                    if fnmatch.fnmatch(event_channel, pattern):
+                        try:
+                            writer.write(event_msg.encode())
+                            await writer.drain()
+                            logging.debug(f"Sent keyevent expired notification for key '{key}' to client id {cid} (pattern: {pattern})")
+                        except Exception as e:
+                            logging.exception(f"Error sending keyevent expired notification to client id {cid}: {e}")
+                    if fnmatch.fnmatch(keyspace_channel, pattern):
+                        try:
+                            writer.write(keyspace_msg.encode())
+                            await writer.drain()
+                            logging.debug(f"Sent keyspace expired notification for key '{key}' to client id {cid} (pattern: {pattern})")
+                        except Exception as e:
+                            logging.exception(f"Error sending keyspace expired notification to client id {cid}: {e}")
 
     async def log_subscriptions(self):
         """
