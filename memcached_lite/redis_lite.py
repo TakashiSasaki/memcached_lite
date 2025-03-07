@@ -179,7 +179,3 @@ class RedisLiteServer:
         async with server:
             await server.serve_forever()
 
-if __name__ == '__main__':
-    print("running RedisLiteServer")
-    server = RedisLiteServer()
-    asyncio.run(server.start())
