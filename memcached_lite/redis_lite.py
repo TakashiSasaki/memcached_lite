@@ -3,6 +3,7 @@ import time
 import os
 import sys
 import logging
+import fnmatch
 
 # Configure detailed logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -50,9 +51,9 @@ class RedisLiteServer:
     def __init__(self, host='127.0.0.1', port=11311, log_interval=10):
         self.host = host
         self.port = port
-        self.log_interval = log_interval  # Interval in seconds for logging subscriptions
-        self.clients = {}           # Mapping: client_id -> { "id": client_id, "addr": addr, "subscriptions": [], "writer": writer }
-        self.client_counter = 0     # Unique id counter for clients
+        self.log_interval = log_interval  # For periodic logging if needed
+        self.clients = {}  # Mapping: client_id -> { "id": client_id, "addr": addr, "subscriptions": [], "writer": writer }
+        self.client_counter = 0  # Unique id counter for clients
 
     async def handle_client(self, reader, writer):
         addr = writer.get_extra_info('peername')
@@ -154,6 +155,45 @@ class RedisLiteServer:
                 del self.clients[client_id]
                 logging.info(f"Removed client id {client_id} from registry")
             logging.info(f"Connection closed: {addr} (id: {client_id})")
+
+    async def notify_del(self, key: str):
+        """
+        Sends a deletion notification for the given key to all clients whose subscription
+        patterns match either the keyevent channel or the keyspace channel for this key.
+        
+        For keyevent notifications, the channel is '__keyevent@0__:del' and the data is the key.
+        For keyspace notifications, the channel is '__keyspace@0__:<key>' and the data is 'del'.
+        
+        RESP format for notification:
+          *3\r\n$7\r\nmessage\r\n$<len(channel)>\r\n<channel>\r\n$<len(data)>\r\n<data>\r\n
+        """
+        event_channel = "__keyevent@0__:del"
+        keyspace_channel = f"__keyspace@0__:{key}"
+        
+        # Build RESP messages
+        event_msg = f"*3\r\n$7\r\nmessage\r\n${len(event_channel)}\r\n{event_channel}\r\n${len(key)}\r\n{key}\r\n"
+        keyspace_msg = f"*3\r\n$7\r\nmessage\r\n${len(keyspace_channel)}\r\n{keyspace_channel}\r\n$3\r\ndel\r\n"
+        
+        for cid, info in list(self.clients.items()):
+            writer = info.get("writer")
+            if writer and not writer.is_closing():
+                # For each subscription pattern of the client,
+                # send the corresponding notification if the pattern matches.
+                for pattern in info["subscriptions"]:
+                    if fnmatch.fnmatch(event_channel, pattern):
+                        try:
+                            writer.write(event_msg.encode())
+                            await writer.drain()
+                            logging.debug(f"Sent keyevent deletion notification for key '{key}' to client id {cid} (pattern: {pattern})")
+                        except Exception as e:
+                            logging.exception(f"Error sending keyevent deletion notification to client id {cid}: {e}")
+                    if fnmatch.fnmatch(keyspace_channel, pattern):
+                        try:
+                            writer.write(keyspace_msg.encode())
+                            await writer.drain()
+                            logging.debug(f"Sent keyspace deletion notification for key '{key}' to client id {cid} (pattern: {pattern})")
+                        except Exception as e:
+                            logging.exception(f"Error sending keyspace deletion notification to client id {cid}: {e}")
 
     async def log_subscriptions(self):
         """
