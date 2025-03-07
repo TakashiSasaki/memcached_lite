@@ -4,3 +4,4 @@ memcached_lite/__pycache__/__main__.cpython-313.pyc
 memcached_lite/__pycache__/run_daemon.cpython-313.pyc
 memcached_lite/__pycache__/status.cpython-313.pyc
 memcached_lite/__pycache__/redis_lite.cpython-313.pyc
+memcached_lite/__pycache__/redis_notification.cpython-313.pyc

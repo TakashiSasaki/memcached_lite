@@ -5,10 +5,10 @@ import time
 import asyncio
 import sys
 sys.path.append("..")
-from memcached_lite.redis_lite import RedisLiteServer  # Adjust the import path as needed
+from memcached_lite.redis_notification import RedisNotificationServer
 
 # Create a server instance (assumes RedisLiteServer is running in the same environment)
-server_instance = RedisLiteServer()
+server_instance = RedisNotificationServer()
 
 def test_ping(r, conn_id):
     print(f"Testing PING command on connection {conn_id}...")
@@ -80,11 +80,11 @@ async def test_notify_set():
     print("notify_set test complete.")
 
 async def test_notify_expire():
-    print("\nTesting notify_expire for key 'testkey'...")
+    print("\nTesting notify_expire for key 'testkey' (EXPIRE event)...")
     r_sub = redis.Redis(host='localhost', port=11311, decode_responses=True)
     pubsub = r_sub.pubsub()
-    # Subscribe to keyevent 'expired' and keyspace notifications for "testkey"
-    pubsub.psubscribe("__keyevent@0__:expired", f"__keyspace@0__:testkey")
+    # Subscribe to keyevent 'expire' and keyspace notifications for "testkey"
+    pubsub.psubscribe("__keyevent@0__:expire", f"__keyspace@0__:testkey")
     print("Subscribed for expire notifications for key 'testkey'.")
     
     await asyncio.sleep(2)
@@ -100,6 +100,28 @@ async def test_notify_expire():
         await asyncio.sleep(1)
     pubsub.close()
     print("notify_expire test complete.")
+
+async def test_notify_expired():
+    print("\nTesting notify_expired for key 'testkey' (EXPIRED event)...")
+    r_sub = redis.Redis(host='localhost', port=11311, decode_responses=True)
+    pubsub = r_sub.pubsub()
+    # Subscribe to keyevent 'expired' and keyspace notifications for "testkey"
+    pubsub.psubscribe("__keyevent@0__:expired", f"__keyspace@0__:testkey")
+    print("Subscribed for expired notifications for key 'testkey'.")
+    
+    await asyncio.sleep(2)
+    
+    print("Calling notify_expired('testkey')...")
+    await server_instance.notify_expired("testkey")
+    
+    start = time.time()
+    while time.time() - start < 5:
+        message = pubsub.get_message(timeout=1)
+        if message:
+            print("Received expired notification:", message)
+        await asyncio.sleep(1)
+    pubsub.close()
+    print("notify_expired test complete.")
 
 if __name__ == '__main__':
     # Open 3 separate connections
@@ -123,8 +145,8 @@ if __name__ == '__main__':
     test_psubscribe(r1)
     
     asyncio.run(test_notify_set())
-    
     asyncio.run(test_notify_expire())
+    asyncio.run(test_notify_expired())
     
     print("Waiting 10 seconds before closing all connections...")
     time.sleep(10)
