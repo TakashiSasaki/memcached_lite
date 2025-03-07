@@ -136,15 +136,6 @@ class RedisLiteServer:
                             logging.info(f"Client {addr} (id: {client_id}) subscribed to pattern: {pattern} (total: {subscription_count})")
                         # Enter subscription mode: keep the connection open and ignore further commands.
                         subscription_mode = True
-                elif command == "KEEPALIVE":
-                    logging.debug(f"KEEPALIVE command received from {addr} (id: {client_id})")
-                    # Log the current subscriptions for each client.
-                    logging.info("Current client subscriptions:")
-                    for cid, info in self.clients.items():
-                        logging.info(f"Client {cid} ({info['addr']}): {info['subscriptions']}")
-                    # Immediately call send_keepalive method.
-                    await self.send_keepalive()
-                    writer.write(b"+OK\r\n")
                 else:
                     logging.debug(f"Unknown command from {addr} (id: {client_id}): {cmd_parts}")
                     writer.write(b"-ERR unknown command\r\n")
@@ -162,27 +153,6 @@ class RedisLiteServer:
                 del self.clients[client_id]
                 logging.info(f"Removed client id {client_id} from registry")
             logging.info(f"Connection closed: {addr} (id: {client_id})")
-
-    async def send_keepalive(self, message: str = "+KEEPALIVE\r\n"):
-        """
-        Sends a keepalive message to all connected clients.
-        The message content can be controlled externally.
-        """
-        for cid, info in list(self.clients.items()):
-            writer = info.get("writer")
-            if writer:
-                try:
-                    # Check if the writer is already closing.
-                    if writer.is_closing():
-                        logging.warning(f"Writer for client id {cid} is closing. Skipping keepalive.")
-                        continue
-                    writer.write(message.encode())
-                    await writer.drain()
-                    logging.debug(f"Sent keepalive to client id {cid}")
-                except (ConnectionResetError, ConnectionAbortedError, OSError) as e:
-                    logging.exception(f"Error sending keepalive to client id {cid}: {e}")
-                    # Optionally remove the client from the registry if needed.
-                    del self.clients[cid]
 
     async def start(self):
         server = await asyncio.start_server(self.handle_client, self.host, self.port)

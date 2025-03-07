@@ -19,11 +19,21 @@ def test_client_list(r):
     print(result)
 
 def test_psubscribe(r):
-    print("\nTesting PSUBSCRIBE command for key notifications...")
+    print("\nTesting PSUBSCRIBE command for key notifications with multiple patterns...")
     pubsub = r.pubsub()
-    # Subscribe to both keyspace and keyevent notification patterns.
-    pubsub.psubscribe("__keyspace@0__:*", "__keyevent@0__:*")
-    print("Subscribed to key notification patterns. Waiting for messages for 10 seconds...")
+    # Subscribe to multiple patterns so that the server's subscription list is richly populated.
+    patterns = [
+        "__keyspace@0__:*",
+        "__keyspace@0__:user:*",
+        "__keyspace@0__:order:*",
+        "__keyevent@0__:*",
+        "__keyevent@0__:user:*",
+        "__keyevent@0__:order:*",
+        "__keyspace@0__:session:*",
+        "__keyevent@0__:session:*"
+    ]
+    pubsub.psubscribe(*patterns)
+    print("Subscribed to multiple key notification patterns. Waiting for messages for 10 seconds...")
     
     start = time.time()
     while time.time() - start < 10:
@@ -33,20 +43,10 @@ def test_psubscribe(r):
         else:
             print("No message received...")
         time.sleep(1)
-    # Wait extra time to allow keepalive messages to be sent
     print("Waiting 5 seconds before closing pubsub connection...")
     time.sleep(5)
     pubsub.close()
     print("PSUBSCRIBE test complete.")
-
-def test_keepalive(r, conn_id):
-    print(f"\nTesting KEEPALIVE command on connection {conn_id}...")
-    result = r.execute_command("KEEPALIVE")
-    print(f"KEEPALIVE response from connection {conn_id}:")
-    print(result)
-    # Wait a few seconds to allow the server to send keepalive messages to other clients.
-    print("Waiting 5 seconds after sending KEEPALIVE command...")
-    time.sleep(5)
 
 if __name__ == '__main__':
     # Open 3 separate connections
@@ -70,11 +70,8 @@ if __name__ == '__main__':
     # Test CLIENT LIST using one connection
     test_client_list(r1)
     
-    # Test PSUBSCRIBE on one connection
+    # Test PSUBSCRIBE on one connection (subscribe to multiple patterns)
     test_psubscribe(r1)
-    
-    # Test KEEPALIVE on connection 3 (which is not in subscription mode)
-    test_keepalive(r3, 3)
     
     # Final delay to keep connections alive before closing
     print("Waiting 10 seconds before closing all connections...")
