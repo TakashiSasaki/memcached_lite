@@ -3,7 +3,6 @@ import asyncio
 import time
 import os
 import logging
-import fnmatch
 
 # Configure detailed logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -181,5 +180,6 @@ class RedisLiteServer:
             await server.serve_forever()
 
 if __name__ == '__main__':
+    print("running RedisLiteServer")
     server = RedisLiteServer()
     asyncio.run(server.start())

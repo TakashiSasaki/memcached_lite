@@ -5,7 +5,7 @@ import time
 import asyncio
 import sys
 sys.path.append("..")
-from memcached_lite.redis_notification import RedisNotificationServer
+from memcached_lite import RedisNotificationServer
 
 # Create a server instance (assumes RedisLiteServer is running in the same environment)
 server_instance = RedisNotificationServer()
