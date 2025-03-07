@@ -1,6 +1,5 @@
 # filename: redis_notification.py
 
-import asyncio
 import fnmatch
 import logging
 from .redis_lite import RedisLiteServer
@@ -195,7 +194,3 @@ class RedisNotificationServer(RedisLiteServer):
                             logging.debug(f"Sent keyspace evicted notification for key '{key}' to client id {cid} (pattern: {pattern})")
                         except Exception as e:
                             logging.exception(f"Error sending keyspace evicted notification to client id {cid}: {e}")
-
-if __name__ == '__main__':
-    server = RedisNotificationServer()
-    asyncio.run(server.start())

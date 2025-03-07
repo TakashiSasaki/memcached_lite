@@ -1,5 +1,8 @@
+# filename: redis_lite_main.py
+import sys
+sys.path.append(".")
 import asyncio
-from redis_lite import RedisLiteServer
+from memcached_lite import RedisLiteServer
 
 if __name__ == '__main__':
     print("running RedisLiteServer")
