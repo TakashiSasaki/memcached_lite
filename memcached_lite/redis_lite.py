@@ -50,7 +50,7 @@ class RedisLiteServer:
     def __init__(self, host='127.0.0.1', port=11311):
         self.host = host
         self.port = port
-        self.clients = {}           # Dictionary mapping client_id -> client info (e.g., addr)
+        self.clients = {}           # Dictionary mapping client_id -> client info (e.g., addr, subscriptions)
         self.client_counter = 0     # Unique id counter for clients
 
     async def handle_client(self, reader, writer):
@@ -61,7 +61,7 @@ class RedisLiteServer:
         self.clients[client_id] = {
             "id": client_id,
             "addr": addr,
-            # You could add more info here if needed (e.g., connection time)
+            "subscriptions": []   # List to track PSUBSCRIBE patterns
         }
         logging.info(f"Client connected: {addr}, assigned id: {client_id}")
 
@@ -110,9 +110,10 @@ class RedisLiteServer:
                     lines = []
                     for cid, info in self.clients.items():
                         client_addr = info["addr"]
+                        subs = ",".join(info["subscriptions"]) if info["subscriptions"] else ""
                         line = (f"id={cid} addr={client_addr[0]}:{client_addr[1]} fd=5 name= age=0 idle=0 flags=N "
-                                f"db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=32768 obl=0 oll=0 omem=0 "
-                                "events=r cmd=client\r\n")
+                                f"db=0 sub=0 psub={len(info['subscriptions'])} multi=-1 qbuf=0 qbuf-free=32768 obl=0 oll=0 omem=0 "
+                                f"events=r cmd=client subscriptions=[{subs}]\r\n")
                         lines.append(line)
                     client_list = "".join(lines)
                     resp = f"${len(client_list)}\r\n{client_list}\r\n"
@@ -125,6 +126,8 @@ class RedisLiteServer:
                         subscription_count = 0
                         for pattern in cmd_parts[1:]:
                             subscription_count += 1
+                            # Record the subscription pattern in the client's registry.
+                            self.clients[client_id]["subscriptions"].append(pattern)
                             # Send RESP-formatted subscription confirmation:
                             # *3\r\n$10\r\npsubscribe\r\n$<len(pattern)>\r\n<pattern>\r\n:<subscription_count>\r\n
                             response = f"*3\r\n$10\r\npsubscribe\r\n${len(pattern)}\r\n{pattern}\r\n:{subscription_count}\r\n"
