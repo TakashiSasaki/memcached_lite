@@ -36,6 +36,12 @@ def test_psubscribe(r):
     pubsub.close()
     print("PSUBSCRIBE test complete.")
 
+def test_keepalive(r, conn_id):
+    print(f"\nTesting KEEPALIVE command on connection {conn_id}...")
+    result = r.execute_command("KEEPALIVE")
+    print(f"KEEPALIVE response from connection {conn_id}:")
+    print(result)
+
 if __name__ == '__main__':
     # Open 3 separate connections
     r1 = redis.Redis(host='localhost', port=11311, decode_responses=True)
@@ -60,3 +66,6 @@ if __name__ == '__main__':
     
     # Test PSUBSCRIBE on one connection
     test_psubscribe(r1)
+    
+    # Test KEEPALIVE on connection 3 (which is not in subscription mode)
+    test_keepalive(r3, 3)

@@ -55,7 +55,7 @@ class RedisLiteServer:
 
     async def handle_client(self, reader, writer):
         addr = writer.get_extra_info('peername')
-        # Assign a unique client id and store connection info, including the writer.
+        # Assign a unique client id and store connection info.
         self.client_counter += 1
         client_id = self.client_counter
         self.clients[client_id] = {
@@ -136,6 +136,12 @@ class RedisLiteServer:
                             logging.info(f"Client {addr} (id: {client_id}) subscribed to pattern: {pattern} (total: {subscription_count})")
                         # Enter subscription mode: keep the connection open and ignore further commands.
                         subscription_mode = True
+                elif command == "KEEPALIVE":
+                    logging.debug(f"KEEPALIVE command received from {addr} (id: {client_id})")
+                    # Immediately call send_keepalive method.
+                    await self.send_keepalive()
+                    # Optionally, you can respond to the client.
+                    writer.write(b"+OK\r\n")
                 else:
                     logging.debug(f"Unknown command from {addr} (id: {client_id}): {cmd_parts}")
                     writer.write(b"-ERR unknown command\r\n")
@@ -178,5 +184,4 @@ class RedisLiteServer:
 
 if __name__ == '__main__':
     server = RedisLiteServer()
-    # Optionally, you can schedule send_keepalive externally.
     asyncio.run(server.start())
