@@ -4,10 +4,11 @@ import redis
 import time
 import asyncio
 import sys
-sys.path.append("..")
+sys.path.append(".")
+from memcached_lite import RedisLiteServer  # Adjust the import path as needed
 from memcached_lite import RedisNotificationServer
 
-# Create a server instance (assumes RedisLiteServer is running in the same environment)
+# Create a server instance (assumes RedisNotificationServer is running in the same environment)
 server_instance = RedisNotificationServer()
 
 def test_ping(r, conn_id):
@@ -123,6 +124,28 @@ async def test_notify_expired():
     pubsub.close()
     print("notify_expired test complete.")
 
+async def test_notify_evicted():
+    print("\nTesting notify_evicted for key 'testkey' (EVICTED event)...")
+    r_sub = redis.Redis(host='localhost', port=11311, decode_responses=True)
+    pubsub = r_sub.pubsub()
+    # Subscribe to keyevent 'evicted' and keyspace notifications for "testkey"
+    pubsub.psubscribe("__keyevent@0__:evicted", f"__keyspace@0__:testkey")
+    print("Subscribed for evicted notifications for key 'testkey'.")
+    
+    await asyncio.sleep(2)
+    
+    print("Calling notify_evicted('testkey')...")
+    await server_instance.notify_evicted("testkey")
+    
+    start = time.time()
+    while time.time() - start < 5:
+        message = pubsub.get_message(timeout=1)
+        if message:
+            print("Received evicted notification:", message)
+        await asyncio.sleep(1)
+    pubsub.close()
+    print("notify_evicted test complete.")
+
 if __name__ == '__main__':
     # Open 3 separate connections
     r1 = redis.Redis(host='localhost', port=11311, decode_responses=True)
@@ -147,6 +170,7 @@ if __name__ == '__main__':
     asyncio.run(test_notify_set())
     asyncio.run(test_notify_expire())
     asyncio.run(test_notify_expired())
+    asyncio.run(test_notify_evicted())
     
     print("Waiting 10 seconds before closing all connections...")
     time.sleep(10)

@@ -160,6 +160,42 @@ class RedisNotificationServer(RedisLiteServer):
                         except Exception as e:
                             logging.exception(f"Error sending keyspace expired notification to client id {cid}: {e}")
 
+    async def notify_evicted(self, key: str):
+        """
+        Sends an eviction notification for the given key to all clients whose subscription
+        patterns match either the keyevent channel or the keyspace channel for eviction.
+        
+        For keyevent notifications, the channel is '__keyevent@0__:evicted' and the data is the key.
+        For keyspace notifications, the channel is '__keyspace@0__:{key}' and the data is 'evicted'.
+        
+        RESP message format:
+          *3\r\n$7\r\nmessage\r\n$<len(channel)>\r\n<channel>\r\n$<len(data)>\r\n<data>\r\n
+        """
+        event_channel = "__keyevent@0__:evicted"
+        keyspace_channel = f"__keyspace@0__:{key}"
+        
+        event_msg = f"*3\r\n$7\r\nmessage\r\n${len(event_channel)}\r\n{event_channel}\r\n${len(key)}\r\n{key}\r\n"
+        keyspace_msg = f"*3\r\n$7\r\nmessage\r\n${len(keyspace_channel)}\r\n{keyspace_channel}\r\n$7\r\nevicted\r\n"
+        
+        for cid, info in list(self.clients.items()):
+            writer = info.get("writer")
+            if writer and not writer.is_closing():
+                for pattern in info["subscriptions"]:
+                    if fnmatch.fnmatch(event_channel, pattern):
+                        try:
+                            writer.write(event_msg.encode())
+                            await writer.drain()
+                            logging.debug(f"Sent keyevent evicted notification for key '{key}' to client id {cid} (pattern: {pattern})")
+                        except Exception as e:
+                            logging.exception(f"Error sending keyevent evicted notification to client id {cid}: {e}")
+                    if fnmatch.fnmatch(keyspace_channel, pattern):
+                        try:
+                            writer.write(keyspace_msg.encode())
+                            await writer.drain()
+                            logging.debug(f"Sent keyspace evicted notification for key '{key}' to client id {cid} (pattern: {pattern})")
+                        except Exception as e:
+                            logging.exception(f"Error sending keyspace evicted notification to client id {cid}: {e}")
+
 if __name__ == '__main__':
     server = RedisNotificationServer()
     asyncio.run(server.start())
