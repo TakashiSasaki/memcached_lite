@@ -50,18 +50,19 @@ class RedisLiteServer:
     def __init__(self, host='127.0.0.1', port=11311):
         self.host = host
         self.port = port
-        self.clients = {}           # Dictionary mapping client_id -> client info (e.g., addr, subscriptions)
+        self.clients = {}           # Mapping: client_id -> { "id": client_id, "addr": addr, "subscriptions": [], "writer": writer }
         self.client_counter = 0     # Unique id counter for clients
 
     async def handle_client(self, reader, writer):
         addr = writer.get_extra_info('peername')
-        # Assign a unique client id and store connection info.
+        # Assign a unique client id and store connection info, including the writer.
         self.client_counter += 1
         client_id = self.client_counter
         self.clients[client_id] = {
             "id": client_id,
             "addr": addr,
-            "subscriptions": []   # List to track PSUBSCRIBE patterns
+            "subscriptions": [],
+            "writer": writer
         }
         logging.info(f"Client connected: {addr}, assigned id: {client_id}")
 
@@ -153,6 +154,21 @@ class RedisLiteServer:
                 logging.info(f"Removed client id {client_id} from registry")
             logging.info(f"Connection closed: {addr} (id: {client_id})")
 
+    async def send_keepalive(self, message: str = "+KEEPALIVE\r\n"):
+        """
+        Sends a keepalive message to all connected clients.
+        The message content can be controlled externally.
+        """
+        for cid, info in self.clients.items():
+            writer = info.get("writer")
+            if writer:
+                try:
+                    writer.write(message.encode())
+                    await writer.drain()
+                    logging.debug(f"Sent keepalive to client id {cid}")
+                except Exception as e:
+                    logging.exception(f"Error sending keepalive to client id {cid}: {e}")
+
     async def start(self):
         server = await asyncio.start_server(self.handle_client, self.host, self.port)
         addr = server.sockets[0].getsockname()
@@ -162,4 +178,5 @@ class RedisLiteServer:
 
 if __name__ == '__main__':
     server = RedisLiteServer()
+    # Optionally, you can schedule send_keepalive externally.
     asyncio.run(server.start())
